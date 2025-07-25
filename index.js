@@ -1,62 +1,62 @@
 import express from 'express';
-import fetch from 'node-fetch';
 import dotenv from 'dotenv';
+import fetch from 'node-fetch';
 
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 10000;
+const PORT = process.env.PORT || 10000;
 
 app.use(express.json());
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-const TABLE_SALES = process.env.SUPABASE_TABLE_SALES;
-const TABLE_RENTALS = process.env.SUPABASE_TABLE_RENTALS;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const insertIntoSupabase = async (table, payload) => {
-  const url = `${SUPABASE_URL}/rest/v1/${table}`;
-  const headers = {
-    'Content-Type': 'application/json',
-    'apikey': SUPABASE_ANON_KEY,
-    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-    'Prefer': 'resolution=merge-duplicates'
-  };
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error("❌ Missing Supabase env vars");
+  process.exit(1);
+}
 
+const insertListing = async (table, listing) => {
   try {
-    const response = await fetch(url, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
       method: 'POST',
-      headers,
-      body: JSON.stringify([payload])
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify([listing])
     });
 
-    const result = await response.json();
+    const data = await res.json();
 
-    if (!response.ok) {
-      console.error('❌ Insert failed:', result);
-    } else if (result.length === 0) {
-      console.log('⚠️ Insert skipped (duplicate or empty)');
+    if (!res.ok) {
+      console.error("❌ Supabase insert error:", data?.message || data);
+    } else if (!data || data.length === 0) {
+      console.error("⚠️ Insert returned no rows for", listing.uuid);
     } else {
-      console.log('✅ Inserted into Supabase:', result[0].uuid || result[0].id);
+      console.log("✅ Inserted:", data.map(d => d.uuid));
     }
 
-    return result;
   } catch (err) {
-    console.error('❌ Error inserting into Supabase:', err);
-    return null;
+    console.error("❌ Insert failed:", err.message || err);
   }
 };
 
 app.post('/sales', async (req, res) => {
-  const result = await insertIntoSupabase(TABLE_SALES, req.body);
-  res.json({ inserted: result });
+  const listing = req.body;
+  await insertListing('sales_listings', listing);
+  res.sendStatus(200);
 });
 
 app.post('/rentals', async (req, res) => {
-  const result = await insertIntoSupabase(TABLE_RENTALS, req.body);
-  res.json({ inserted: result });
+  const listing = req.body;
+  await insertListing('rental_listings', listing);
+  res.sendStatus(200);
 });
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
