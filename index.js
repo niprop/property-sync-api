@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 10000;
 app.use(express.json());
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error("❌ Missing Supabase env vars");
@@ -19,6 +19,8 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const insertListing = async (table, listing) => {
   try {
+    console.log(`📦 Attempting to insert into ${table}:`, listing);
+
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
       method: 'POST',
       headers: {
@@ -33,7 +35,9 @@ const insertListing = async (table, listing) => {
     const data = await res.json();
 
     if (!res.ok) {
-      console.error("❌ Supabase insert error:", data?.message || data);
+      console.error("❌ Supabase insert error:");
+      console.error("Status:", res.status);
+      console.error("Body:", data);
     } else if (!data || data.length === 0) {
       console.error("⚠️ Insert returned no rows for", listing.uuid);
     } else {
@@ -60,3 +64,4 @@ app.post('/rentals', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
