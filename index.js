@@ -53,11 +53,11 @@ async function handleInsert(req, res) {
     energy_rating: payload.energyRating || null,
     rates: payload.rates || null,
     style: payload.style || null,
-    listing_type: payload.listingType || null,
+    listingtype: payload.listingType || null,        // ✅ matches Supabase exactly
     price_text: payload.priceText || null,
     source_url: payload.sourceUrl || null,
-    listing_id: payload.listingId || null,
-    scraped_at: payload.detectedAt || null,
+    listingid: payload.listingId || null,            // ✅ matches Supabase exactly
+    scraped_at: payload.detectedAt || null           // ✅ matches Supabase exactly
   };
 
   logInsertAttempt('listings', snakeCasePayload);
