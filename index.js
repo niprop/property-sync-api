@@ -1,69 +1,85 @@
+// index.js
 import express from 'express';
-import dotenv from 'dotenv';
-import fetch from 'node-fetch';
 import cors from 'cors';
+import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 
+// Load env vars
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const port = process.env.PORT || 10000;
 
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error("❌ Missing Supabase env vars");
-  process.exit(1);
-}
+// Logging util
+const logInsertAttempt = (table, data) => {
+  console.log(`📦 Attempting to insert into ${table}:`, data);
+};
 
-const insertListing = async (listing) => {
-  try {
-    // Ensure required fields are present
-    if (!listing.uuid) {
-      listing.uuid = uuidv4(); // fallback if UUID not provided
-    }
-
-    console.log('📦 Attempting to insert into listings:', listing);
-
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/listings`, {
-      method: 'POST',
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=representation'
-      },
-      body: JSON.stringify([listing])
-    });
-
-    const body = await res.text();
-    if (!res.ok) {
-      console.error("❌ Supabase insert error:");
-      console.error("Status:", res.status);
-      console.error("Body:", body);
-    } else {
-      const parsed = JSON.parse(body);
-      console.log("✅ Inserted:", parsed.map(row => row.uuid));
-    }
-  } catch (err) {
-    console.error("❌ Insert failed:", err.message || err);
+const logInsertError = (error) => {
+  console.error('❌ Supabase insert error:');
+  if (error) {
+    console.error('Status:', error.code || error.status || 'Unknown');
+    console.error('Message:', error.message || JSON.stringify(error));
+    if (error.details) console.error('Details:', error.details);
   }
 };
 
-app.post('/sales', async (req, res) => {
-  await insertListing(req.body);
-  res.send('Insert attempted');
-});
+// Insert handler
+async function handleInsert(req, res) {
+  const payload = req.body;
 
-app.post('/rentals', async (req, res) => {
-  await insertListing(req.body);
-  res.send('Insert attempted');
-});
+  const snakeCasePayload = {
+    id: uuidv4(),
+    uuid: payload.uuid,
+    title: payload.title,
+    price: payload.price,
+    postcode: payload.postcode,
+    property_type: payload.houseType || null,
+    beds: payload.beds ?? null,
+    bathrooms: payload.bathrooms ?? null,
+    receptions: payload.receptions ?? null,
+    tenure: payload.tenure || null,
+    energy_rating: payload.energyRating || null,
+    rates: payload.rates || null,
+    style: payload.style || null,
+    listing_type: payload.listingType || null,
+    price_text: payload.priceText || null,
+    source_url: payload.sourceUrl || null,
+    listing_id: payload.listingId || null,
+    scraped_at: payload.detectedAt || null,
+  };
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server is running on port ${PORT}`);
+  logInsertAttempt('listings', snakeCasePayload);
+
+  const { error } = await supabase.from('listings').insert(snakeCasePayload);
+
+  if (error) {
+    logInsertError(error);
+    return res.status(500).send('Insert failed');
+  }
+
+  res.send('OK');
+}
+
+// Routes
+app.post('/sales', handleInsert);
+app.post('/rentals', handleInsert);
+
+// Start server
+app.listen(port, () => {
+  console.log(`🚀 Server is running on port ${port}`);
+  console.log('///////////////////////////////////////////////////////////');
+  console.log(`Available at your primary URL https://property-sync-api.onrender.com`);
+  console.log('///////////////////////////////////////////////////////////');
 });
