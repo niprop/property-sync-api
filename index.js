@@ -51,7 +51,7 @@ const insertListing = async (table, listing) => {
 
 app.post('/sales', async (req, res) => {
   const listing = req.body;
-  await insertListing('sales_listings', listing);
+  await insertListing('listings', listing);
   res.sendStatus(200);
 });
 
