@@ -1,72 +1,69 @@
 import express from 'express';
+import dotenv from 'dotenv';
+import fetch from 'node-fetch';
 import cors from 'cors';
-import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 
+dotenv.config();
+
 const app = express();
-const port = process.env.PORT || 10000;
+const PORT = process.env.PORT || 10000;
 
 app.use(cors());
 app.use(express.json());
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-async function insertListing(table, listing) {
-  const data = {
-    id: uuidv4(),
-    uuid: listing.uuid || null,
-    title: listing.title || null,
-    price: listing.price || null,
-    postcode: listing.postcode || null,
-    property_type: listing.houseType || null,
-    beds: listing.beds || null,
-    source_url: listing.link || null,
-    scraped_at: listing.detectedAt || null,
-    bathrooms: listing.bathrooms || null,
-    receptions: listing.receptions || null,
-    tenure: listing.tenure || null,
-    energy_rating: listing.energyRating || null,
-    rates: listing.rates || null,
-    style: listing.style || null,
-    listing_type: listing.listingType || null,
-    price_text: listing.price_text || null,
-    listing_id: listing.listingId || null,
-  };
-
-  console.log(`📦 Attempting to insert into ${table}:`, data);
-
-  const { error } = await supabase.from(table).insert([data]);
-
-  if (error) {
-    console.error('❌ Supabase insert error:');
-    console.error('Status:', error.code || 'unknown');
-    console.error('Message:', error.message);
-    console.error('Details:', error.details || 'No details');
-    throw error;
-  }
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error("❌ Missing Supabase env vars");
+  process.exit(1);
 }
 
-app.post('/sales', async (req, res) => {
+const insertListing = async (listing) => {
   try {
-    await insertListing('listings', req.body);
-    res.status(200).send('OK');
+    // Ensure required fields are present
+    if (!listing.uuid) {
+      listing.uuid = uuidv4(); // fallback if UUID not provided
+    }
+
+    console.log('📦 Attempting to insert into listings:', listing);
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/listings`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation'
+      },
+      body: JSON.stringify([listing])
+    });
+
+    const body = await res.text();
+    if (!res.ok) {
+      console.error("❌ Supabase insert error:");
+      console.error("Status:", res.status);
+      console.error("Body:", body);
+    } else {
+      const parsed = JSON.parse(body);
+      console.log("✅ Inserted:", parsed.map(row => row.uuid));
+    }
   } catch (err) {
-    res.status(400).send('Insert failed');
+    console.error("❌ Insert failed:", err.message || err);
   }
+};
+
+app.post('/sales', async (req, res) => {
+  await insertListing(req.body);
+  res.send('Insert attempted');
 });
 
 app.post('/rentals', async (req, res) => {
-  try {
-    await insertListing('rental_listings', req.body);
-    res.status(200).send('OK');
-  } catch (err) {
-    res.status(400).send('Insert failed');
-  }
+  await insertListing(req.body);
+  res.send('Insert attempted');
 });
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+app.listen(PORT, () => {
+  console.log(`🚀 Server is running on port ${PORT}`);
 });
